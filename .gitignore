@@ -1,0 +1,34 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+logs/
+runs/
+wandb/
+
+# Build/cache
+build/
+dist/
+.cache/
+.vscode-server/
+
+# Data/model/video large files
+data/
+datasets/
+weights/
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.bin
+*.mp4
+*.avi
+*.bag
+*.db3
+
+# ROS build outputs
+install/
+log/
+build/

@@ -47,22 +47,45 @@ class PreconvolutedANCDataset(Dataset):
     Provides strictly aligned, time-domain triplets for the network:
     [Raw Reference Noise, Secondary Path, Expected Target Noise].
     """
-    def __init__(self, dataset_dir, noise_names, path_indices, segment_duration=1.0, sr=48000, is_train=True):
+    def __init__(self, dataset_dir, noise_names, path_indices, segment_duration=1.0, sr=48000, is_train=True , samples_per_epoch = None):
         self.dataset_dir = dataset_dir
         self.noise_names = noise_names
         self.path_indices = path_indices
         self.sr = sr
         self.segment_length = int(segment_duration * sr)
         self.is_train = is_train
+        self.samples_per_epoch = samples_per_epoch
 
-        # Load the spatially averaged secondary acoustic paths
+        # Load secondary acoustic paths robustly.
+        # Expected final shape: [Num_Paths, Path_Length]
         sh_path = os.path.join(dataset_dir, 'sh.npy')
-        self.sh_paths = np.load(sh_path).T 
+        sh_arr = np.load(sh_path)
+
+        if sh_arr.ndim != 2:
+            raise ValueError(f"sh.npy should be 2-D, but got shape {sh_arr.shape}")
+
+        max_path_idx = max(path_indices) if len(path_indices) > 0 else 0
+
+        # Case 1: [Num_Paths, Path_Length], e.g. [10, 1967]
+        if sh_arr.shape[0] <= sh_arr.shape[1] and sh_arr.shape[0] > max_path_idx:
+            self.sh_paths = sh_arr
+
+        # Case 2: [Path_Length, Num_Paths], e.g. [1967, 10]
+        elif sh_arr.shape[1] < sh_arr.shape[0] and sh_arr.shape[1] > max_path_idx:
+            self.sh_paths = sh_arr.T
+
+        else:
+            raise ValueError(
+                f"Cannot infer path dimension from sh.npy shape {sh_arr.shape}, "
+                f"max path idx={max_path_idx}"
+            )
         
         self.expected_dir = os.path.join(dataset_dir, 'EXPECTED_NOISE')
         self.raw_noise_dir = os.path.join(dataset_dir, 'NOISE')
 
     def __len__(self):
+        if self.is_train and self.samples_per_epoch is not None:
+            return self.samples_per_epoch
         return len(self.path_indices)
 
     def _fast_read_slice(self, filepath, start_idx):
@@ -77,7 +100,13 @@ class PreconvolutedANCDataset(Dataset):
         return y
 
     def __getitem__(self, idx):
-        path_idx = self.path_indices[idx]
+        # Training: randomly sample paths to create a virtual large dataset.
+        # Testing: keep deterministic path indexing for reproducible evaluation.
+        if self.is_train:
+            path_idx = random.choice(self.path_indices)
+        else:
+            path_idx = self.path_indices[idx]
+
         sh = self.sh_paths[path_idx]
         
         # Guard interval to bypass initial audio transients

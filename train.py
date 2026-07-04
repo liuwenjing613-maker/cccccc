@@ -8,6 +8,73 @@ import numpy as np
 
 from dataset import PreconvolutedANCDataset, apply_dynamic_path
 from model import TimeDomainANC
+import random
+
+def set_seed(seed=2026):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+
+def shift_path_batch(sh, shifts):
+    """
+    Shift each secondary path with zero padding.
+
+    sh: [B, L]
+    shifts: [B], positive means delay/right shift.
+    """
+    out = torch.zeros_like(sh)
+    B, L = sh.shape
+
+    for b in range(B):
+        s = int(shifts[b].item())
+
+        if s > 0:
+            out[b, s:] = sh[b, :L - s]
+        elif s < 0:
+            out[b, :L + s] = sh[b, -s:]
+        else:
+            out[b] = sh[b]
+
+    return out
+
+
+def augment_secondary_path(sh, p=0.8, gain_min=0.9, gain_max=1.1, max_delay=12):
+    """
+    Conservative secondary-path augmentation.
+
+    Why:
+    - Avoid path-ID memorization.
+    - Improve unseen-path robustness.
+
+    p:
+        probability of applying augmentation to each batch item.
+
+    max_delay=12:
+        12 samples at 48kHz is about 0.25 ms.
+        Conservative enough for first version.
+    """
+    if p <= 0:
+        return sh
+
+    B, L = sh.shape
+    device = sh.device
+
+    apply_mask = (torch.rand(B, 1, device=device) < p).float()
+
+    gains = gain_min + (gain_max - gain_min) * torch.rand(B, 1, device=device)
+    shifts = torch.randint(
+        low=-max_delay,
+        high=max_delay + 1,
+        size=(B,),
+        device=device,
+    )
+
+    sh_aug = sh * gains
+    sh_aug = shift_path_batch(sh_aug, shifts)
+
+    return apply_mask * sh_aug + (1.0 - apply_mask) * sh
 
 def evaluate_and_plot(model, test_loader, device, sr=48000, scenario_title="Test", save_prefix="test"):
     """
@@ -25,7 +92,7 @@ def evaluate_and_plot(model, test_loader, device, sr=48000, scenario_title="Test
             x_t, sh, d_t = x_t.to(device), sh.to(device), d_t.to(device)
             
             # --- Model Inference ---
-            y_t = model(x_t)
+            y_t = model(x_t, sh)
             
             # Pass the predicted anti-noise through the dynamic secondary physical path
             a_t = apply_dynamic_path(y_t, sh)
@@ -112,6 +179,7 @@ def evaluate_and_plot(model, test_loader, device, sr=48000, scenario_title="Test
 
 
 def main():
+    set_seed(2026)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
@@ -144,18 +212,20 @@ def main():
     print(f"Path allocation successful. Training paths: {len(train_path_indices)}, Test paths: {len(test_path_indices)}")
 
     # Instantiate Datasets and Dataloaders
-    train_dataset = PreconvolutedANCDataset(dataset_dir, train_noises, train_path_indices, segment_duration=1.0, sr=48000, is_train=True)
+    train_dataset = PreconvolutedANCDataset(dataset_dir, train_noises, train_path_indices, segment_duration=1.0, sr=48000, is_train=True,samples_per_epoch=2048)
     test_dataset_seen_paths = PreconvolutedANCDataset(dataset_dir, test_noises, train_path_indices, segment_duration=1.0, sr=48000, is_train=False)
     test_dataset_unseen_paths = PreconvolutedANCDataset(dataset_dir, test_noises, test_path_indices, segment_duration=1.0, sr=48000, is_train=False)
     
-    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True, num_workers=0,drop_last=True)
     test_loader_seen = DataLoader(test_dataset_seen_paths, batch_size=1, shuffle=False)
     test_loader_unseen = DataLoader(test_dataset_unseen_paths, batch_size=1, shuffle=False)
 
     # Initialize the Time-Domain ANC model
-    model = TimeDomainANC(in_channels=1, out_channels=1, hidden_channels=32, num_layers=10).to(device)
+    model = TimeDomainANC(in_channels=1, out_channels=1, hidden_channels=32, num_layers=10,path_emb_dim=32,path_dropout=0.2,attention_start_layer=6).to(device)
+    num_params = sum(p.numel() for p in model.parameters()) / 1e6
+    print(f"Model parameters: {num_params:.3f} M")
     optimizer = optim.Adam(model.parameters(), lr=0.001, amsgrad=True)
-    epochs = 20
+    epochs = 60
 
     print("\n=== Initiating Multi-Scene Acoustic Path Training ===")
     for epoch in range(epochs):
@@ -166,16 +236,21 @@ def main():
             x_t, sh, d_t = x_t.to(device), sh.to(device), d_t.to(device)
             optimizer.zero_grad()
             
-            # --- Model Inference ---
-            # The network processes raw audio waveforms directly
-            y_t = model(x_t)
-            
-            # --- Anti-noise passed through the dynamic secondary physical path ---
-            a_t = apply_dynamic_path(y_t, sh)
-            
-            # --- Error Calculation ---
-            e_t = d_t - a_t 
-            loss = torch.mean(e_t ** 2) 
+            # Conservative path augmentation for training only.
+            # Use the same sh_train for model conditioning and physical convolution.
+            sh_train = augment_secondary_path(
+                sh,
+                p=0.8,
+                gain_min=0.9,
+                gain_max=1.1,
+                max_delay=12,
+            )
+
+            y_t = model(x_t, sh_train)
+            a_t = apply_dynamic_path(y_t, sh_train)
+            e_t = d_t - a_t
+
+            loss = torch.mean(e_t ** 2)
             
             loss.backward()
             optimizer.step()
