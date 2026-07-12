@@ -1,0 +1,31 @@
+{
+  "seed": 2028,
+  "best_step": 4500,
+  "best_validation_nr_db": 12.30927924439311,
+  "seen_paths": {
+    "mean_sample_nr_db": 10.623446123674512,
+    "std_sample_nr_db": 4.468700544342494,
+    "pooled_energy_nr_db": 6.605218655833527,
+    "worst_sample_nr_db": 0.6794912815093994,
+    "best_sample_nr_db": 15.225688934326172,
+    "worst_path_mean_nr_db": 0.7731387764215469,
+    "best_path_mean_nr_db": 14.240865230560303,
+    "negative_sample_count": 0,
+    "negative_path_count": 0,
+    "num_samples": 32,
+    "num_paths": 8
+  },
+  "unseen_paths": {
+    "mean_sample_nr_db": 6.712676405906677,
+    "std_sample_nr_db": 5.2497867184484805,
+    "pooled_energy_nr_db": 3.332798485995731,
+    "worst_sample_nr_db": 1.3753639459609985,
+    "best_sample_nr_db": 12.352734565734863,
+    "worst_path_mean_nr_db": 1.4692671298980713,
+    "best_path_mean_nr_db": 11.956085681915283,
+    "negative_sample_count": 0,
+    "negative_path_count": 0,
+    "num_samples": 8,
+    "num_paths": 2
+  }
+}

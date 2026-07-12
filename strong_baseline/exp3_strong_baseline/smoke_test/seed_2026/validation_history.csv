@@ -1,0 +1,3 @@
+﻿seed,step,recent_train_loss,val_mean_sample_nr_db,val_worst_path_mean_nr_db,val_worst_sample_nr_db,val_negative_sample_count,val_negative_path_count
+2026,10,9.498020081082359e-05,6.703076766803861,0.7852969914674759,0.6383094787597656,0,0
+2026,20,3.578633127290232e-05,8.15616357512772,0.7107815891504288,0.6271315217018127,0,0

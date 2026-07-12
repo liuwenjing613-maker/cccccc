@@ -1,0 +1,24 @@
+{
+  "dataset_dir": "/home/cha_ccf/code/CCF_DEEPANC_2026/dataset",
+  "output_dir": "exp3_strong_baseline/smoke_test",
+  "seeds": [
+    2026
+  ],
+  "max_steps": 20,
+  "eval_interval": 10,
+  "log_interval": 100,
+  "batch_size": 8,
+  "eval_batch_size": 1,
+  "learning_rate": 0.001,
+  "sample_rate": 48000,
+  "segment_duration": 1.0,
+  "repeats_per_combination": 32,
+  "train_start_seconds": 30.0,
+  "fallback_skip_seconds": 20.0,
+  "grid_windows": [
+    20.0,
+    22.0,
+    24.0,
+    26.0
+  ]
+}
