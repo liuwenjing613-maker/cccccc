@@ -1,0 +1,29 @@
+{
+  "dataset_dir": "/home/cha_ccf/code/CCF_DEEPANC_2026/dataset",
+  "output_dir": "/home/cha_ccf/code/CCF_DEEPANC_2026_lwj/P1_paired_path_mix/outputs_p1",
+  "seeds": [
+    2026,
+    2027,
+    2028
+  ],
+  "max_steps": 15000,
+  "eval_interval": 500,
+  "log_interval": 100,
+  "batch_size": 8,
+  "eval_batch_size": 1,
+  "learning_rate": 0.001,
+  "sample_rate": 48000,
+  "segment_duration": 1.0,
+  "repeats_per_combination": 32,
+  "path_mix_probability": 0.5,
+  "path_mix_alpha_min": 0.2,
+  "path_mix_alpha_max": 0.8,
+  "train_start_seconds": 30.0,
+  "fallback_skip_seconds": 20.0,
+  "grid_windows": [
+    20.0,
+    22.0,
+    24.0,
+    26.0
+  ]
+}

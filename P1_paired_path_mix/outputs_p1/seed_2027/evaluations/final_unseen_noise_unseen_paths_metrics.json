@@ -1,0 +1,13 @@
+{
+  "mean_sample_nr_db": 7.340227887034416,
+  "std_sample_nr_db": 5.871142071660753,
+  "pooled_energy_nr_db": 3.4444783414491646,
+  "worst_sample_nr_db": 1.443919062614441,
+  "best_sample_nr_db": 14.054838180541992,
+  "worst_path_mean_nr_db": 1.5375638902187347,
+  "best_path_mean_nr_db": 13.142891883850098,
+  "negative_sample_count": 0,
+  "negative_path_count": 0,
+  "num_samples": 8,
+  "num_paths": 2
+}
