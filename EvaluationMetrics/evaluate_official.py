@@ -18,7 +18,8 @@ from dataset import apply_dynamic_path
 # 0. Import Evaluation Code
 # ==========================================
 # Assumes the evaluation codebase is located in the adjacent 'EvaluationMetrics' directory
-EVAL_DIR = "CCF_DEEPANC_2026-main/EvaluationMetrics"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+EVAL_DIR = os.path.join(BASE_DIR, "EvaluationMetrics")
 if not os.path.exists(EVAL_DIR):
     raise FileNotFoundError(f"Directory {EVAL_DIR} not found. Please ensure the evaluation codebase is present.")
 sys.path.append(EVAL_DIR)
@@ -42,7 +43,15 @@ SEGMENT_SEC = 10.0        # Total duration for testing (first 5s: ANC OFF, last 
 ANC_TURN_ON_TIME = 5.0    # Timestamp to activate ANC (seconds)
 
 # Path Configuration
-SH_NPY_PATH = "dataset/sh.npy"             # Secondary acoustic path array file
+SH_NPY_PATH = os.path.join(BASE_DIR, "dataset", "sh.npy")        # Secondary acoustic path array file
+
+REF_WAV_1 = os.path.join(BASE_DIR, "dataset", "NOISE", "车载.wav")
+EXP_WAV_1 = os.path.join(
+    BASE_DIR,
+    "dataset",
+    "EXPECTED_NOISE",
+    "车载_scene_01.wav",
+)
 
 # ---- Scene 1 Configuration ----
 SCENE1_NAME = "Scene_1_Test"
@@ -110,13 +119,19 @@ def evaluate_single_scene(model, sh_all, scene_name, ref_path, exp_path, sh_inde
     eval_audio = eval_audio / max_abs
     
     # Save the concatenated evaluation audio
-    out_wav_path = f"{scene_name}_eval_recording.wav"
+    out_wav_path = os.path.join(
+        OUTPUT_DIR,
+        f"{scene_name}_eval_recording.wav",
+    )
     sf.write(out_wav_path, eval_audio, SR)
     print(f"✅ Evaluation audio generated: {out_wav_path} (0-{ANC_TURN_ON_TIME}s ANC OFF, {ANC_TURN_ON_TIME}-{SEGMENT_SEC}s ANC ON)")
     
     # 4. Invoke the 1/3 octave band analysis script
     print(f"\n📊 Running acoustic metric analysis via EvaluationMetrics...")
-    octave_plot = f"{scene_name}_octave_analysis.png"
+        octave_plot = os.path.join(
+        OUTPUT_DIR,
+        f"{scene_name}_octave_analysis.png",
+    )
     
     results = analyze_anc_audio(
         audio_path=out_wav_path,
@@ -129,26 +144,58 @@ def evaluate_single_scene(model, sh_all, scene_name, ref_path, exp_path, sh_inde
         mono=True,
         plot=True,
         show_plot=False, # Set to False to prevent blocking continuous execution
-        plot_path=f"{scene_name}_spectrogram.png",
+        plot_path=os.path.join(
+        OUTPUT_DIR,
+        f"{scene_name}_noise_reduction.png",
+    ),
         octave_plot_path=octave_plot
     )
     
     print_analysis_results(results)
     print(f"✅ Frequency band analysis chart saved to: {octave_plot}")
 
+def load_checkpoint(model, checkpoint_path):
+    if not os.path.isfile(checkpoint_path):
+        raise FileNotFoundError(
+            f"找不到模型权重：{checkpoint_path}\n"
+            "禁止使用随机初始化模型进行评估。"
+        )
+
+    try:
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=DEVICE,
+            weights_only=False,
+        )
+    except TypeError:
+        checkpoint = torch.load(
+            checkpoint_path,
+            map_location=DEVICE,
+        )
+
+    if (
+        isinstance(checkpoint, dict)
+        and "model_state_dict" in checkpoint
+    ):
+        state_dict = checkpoint["model_state_dict"]
+    else:
+        state_dict = checkpoint
+
+    model.load_state_dict(state_dict, strict=True)
+    print(f"成功载入权重：{checkpoint_path}")
 
 def main():
     print("=== Initializing ANC Evaluation Framework ===")
     
     # 1. Instantiate the model and load weights
     model = TimeDomainANC(in_channels=1, out_channels=1, hidden_channels=32, num_layers=10)
-    if os.path.exists(MODEL_WEIGHTS_PATH):
-        model.load_state_dict(torch.load(MODEL_WEIGHTS_PATH, map_location=DEVICE))
-        print(f"✅ Model weights loaded successfully: {MODEL_WEIGHTS_PATH}")
-    else:
-        print(f"⚠️ Weight file {MODEL_WEIGHTS_PATH} not found. Testing with random initialization parameters!")
+    load_checkpoint(model, MODEL_WEIGHTS_PATH)
     model = model.to(DEVICE)
     model.eval()
+
+    RUN_TAG = os.environ.get("ANC_RUN_TAG", "default")
+    OUTPUT_DIR = os.path.join(BASE_DIR, "official_eval_results", RUN_TAG)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # 2. Evaluate model complexity
     print("\n" + "="*50)
